@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <!-- SEO & Search Engine Metadata -->
+  <title>Neighbourhood - Interactive Suburban Social Map</title>
+  <meta name="description" content="Explore Neighbourhood: A suburban-style social media network with interactive cul-de-sacs, house channels, elevator feeds, and Google Maps-style navigation.">
+  <meta name="keywords" content="Neighbourhood, social media, suburban UI, interactive map, community channels, apartment elevator feed, search maps">
+  <meta name="robots" content="index, follow">
+  <meta property="og:title" content="Neighbourhood">
+  <meta property="og:description" content="Click around the suburban map to explore channels, streets, and elevator feeds in Neighbourhood.">
+  <meta property="og:type" content="website">
+
+  <style>
+    :root {
+      --grass-color: #7ec850;
+      --road-color: #3a3d40;
+      --road-line: #f1c40f;
+      --sidebar-bg: #1e222a;
+      --house-roof: #e74c3c;
+      --house-wall: #f39c12;
+      --accent-yellow: #ffb703;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+    }
+
+    body {
+      display: flex;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+      background-color: var(--grass-color);
+    }
+
+    /* MAPS-STYLE SEARCH BAR OVERLAY */
+    #maps-search-container {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      z-index: 100;
+      width: 380px;
+      background: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .maps-input-wrapper {
+      display: flex;
+      align-items: center;
+      padding: 10px 14px;
+      gap: 10px;
+    }
+
+    .maps-icon {
+      font-size: 1.2rem;
+      color: #ea4335;
+    }
+
+    .maps-input {
+      border: none;
+      outline: none;
+      width: 100%;
+      font-size: 1rem;
+      color: #333;
+    }
+
+    .maps-search-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 1.1rem;
+      color: #5f6368;
+    }
+
+    /* Streets Filter Bar (Quick Chips) */
+    .street-chips {
+      display: flex;
+      gap: 8px;
+      padding: 8px 14px 12px;
+      overflow-x: auto;
+      border-top: 1px solid #f0f0f0;
+      background: #fafafa;
+    }
+
+    .chip-btn {
+      background: #ffffff;
+      border: 1px solid #dadce0;
+      border-radius: 16px;
+      padding: 6px 12px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #3c4043;
+      cursor: pointer;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.2s;
+    }
+
+    .chip-btn:hover, .chip-btn.active {
+      background: #e8f0fe;
+      color: #1a73e8;
+      border-color: #1a73e8;
+    }
+
+    /* SUBURBAN MAP VIEWPORT */
+    #suburb-map {
+      flex: 1;
+      position: relative;
+      background-color: #6ebd43;
+      background-image: 
+        radial-gradient(#5da736 15%, transparent 16%),
+        radial-gradient(#5da736 15%, transparent 16%);
+      background-size: 60px 60px;
+      background-position: 0 0, 30px 30px;
+      overflow: auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Roads & Cul-de-Sacs */
+    .road-network {
+      position: relative;
+      width: 1100px;
+      height: 750px;
+      background: var(--road-color);
+      border-radius: 40px;
+      border: 8px solid #2d3033;
+      box-shadow: inset 0 0 20px rgba(0,0,0,0.4);
+    }
+
+    .road-line {
+      position: absolute;
+      border: 2px dashed var(--road-line);
+    }
+    .road-line.h { top: 50%; left: 5%; right: 5%; height: 0; }
+    .road-line.v { left: 50%; top: 5%; bottom: 5%; width: 0; }
+
+    /* Interactive House Channels on Map */
+    .house-plot {
+      position: absolute;
+      width: 140px;
+      height: 120px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s;
+    }
+
+    .house-plot:hover {
+      transform: scale(1.1);
+    }
+
+    .house-graphic {
+      width: 70px;
+      height: 50px;
+      background: var(--house-wall);
+      position: relative;
+      border-radius: 4px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+      border: 2px solid #333;
+    }
+
+    .house-graphic::before {
+      content: '';
+      position: absolute;
+      top: -26px;
+      left: -8px;
+      width: 0;
+      height: 0;
+      border-left: 43px solid transparent;
+      border-right: 43px solid transparent;
+      border-bottom: 26px solid var(--house-roof);
+    }
+
+    .house-door {
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 14px;
+      height: 22px;
+      background: #5d4037;
+      border-radius: 2px 2px 0 0;
+    }
+
+    .house-label {
+      margin-top: 8px;
+      background: rgba(0,0,0,0.75);
+      color: #fff;
+      font-size: 0.75rem;
+      font-weight: bold;
+      padding: 3px 8px;
+      border-radius: 10px;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    /* Apartment Building (Elevator Feed Hub) */
+    .apartment-hub {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 160px;
+      height: 160px;
+      background: #2b2e38;
+      border: 4px solid var(--accent-yellow);
+      border-radius: 12px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+      transition: transform 0.2s;
+    }
+
+    .apartment-hub:hover {
+      transform: translate(-50%, -50%) scale(1.05);
+    }
+
+    .apartment-hub-icon {
+      font-size: 2.5rem;
+    }
+
+    .apartment-hub-title {
+      font-weight: bold;
+      color: var(--accent-yellow);
+      font-size: 0.85rem;
+      margin-top: 4px;
+      text-align: center;
+    }
+
+    /* RIGHT SIDE FEED PANEL (SLIDES OPEN ON CHANNEL CLICK) */
+    #feed-drawer {
+      width: 420px;
+      background: var(--sidebar-bg);
+      border-left: 3px solid #2d323e;
+      display: flex;
+      flex-direction: column;
+      box-shadow: -5px 0 20px rgba(0,0,0,0.4);
+      z-index: 90;
+      transition: transform 0.3s ease;
+    }
+
+    .drawer-header {
+      padding: 16px 20px;
+      background: #181a20;
+      border-bottom: 2px solid #2d323e;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .drawer-title {
+      font-size: 1.1rem;
+      font-weight: bold;
+      color: var(--accent-yellow);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* APARTMENT ELEVATOR FEED INSIDE DRAWER */
+    #elevator-feed-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      position: relative;
+      scroll-behavior: smooth;
+    }
+
+    .apartment-card {
+      background: #282c37;
+      border: 2px solid #3a3f50;
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 24px;
+      cursor: pointer;
+      position: relative;
+      transition: border-color 0.2s;
+    }
+
+    .apartment-card:hover {
+      border-color: var(--accent-yellow);
+    }
+
+    .floor-badge {
+      position: absolute;
+      top: -12px;
+      left: 12px;
+      background: var(--accent-yellow);
+      color: #111;
+      font-weight: bold;
+      font-size: 0.7rem;
+      padding: 2px 8px;
+      border-radius: 10px;
+      text-transform: uppercase;
+    }
+
+    .post-author {
+      font-weight: bold;
+      color: #fff;
+      font-size: 0.9rem;
+      margin-bottom: 6px;
+    }
+
+    .post-text {
+      font-size: 0.85rem;
+      color: #d1d5db;
+      margin-bottom: 10px;
+    }
+
+    .post-video-box {
+      width: 100%;
+      height: 160px;
+      background: #121318;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #666;
+      font-size: 0.8rem;
+      font-style: italic;
+      border: 1px dashed #444;
+    }
+
+    .elevator-click-hint {
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--accent-yellow);
+      margin-top: 8px;
+      opacity: 0.8;
+    }
+
+    /* Elevator Shaft Visual Bar */
+    #elevator-bar {
+      position: absolute;
+      right: 6px;
+      top: 20px;
+      bottom: 20px;
+      width: 6px;
+      background: #181a20;
+      border-radius: 3px;
+    }
+
+    #elevator-car-indicator {
+      width: 10px;
+      height: 20px;
+      background: var(--accent-yellow);
+      border-radius: 3px;
+      position: absolute;
+      left: -2px;
+      top: 0%;
+      transition: top 0.2s ease-out;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- MAPS-STYLE SEARCH BAR & STREET FILTERS -->
+  <div id="maps-search-container">
+    <div class="maps-input-wrapper">
+      <span class="maps-icon">📍</span>
+      <input type="text" id="maps-search" class="maps-input" placeholder="Search Neighbourhood..." onkeyup="handleSearch(event)">
+      <button class="maps-search-btn" title="Search">🔍</button>
+    </div>
+    <div class="street-chips">
+      <button class="chip-btn active" onclick="filterStreet('all', this)">🛣️ All Streets</button>
+      <button class="chip-btn" onclick="filterStreet('music', this)">🎵 Harmony Ave</button>
+      <button class="chip-btn" onclick="filterStreet('gaming', this)">🎮 Arcade Lane</button>
+      <button class="chip-btn" onclick="filterStreet('tech', this)">⚡ Innovation Way</button>
+    </div>
+  </div>
+
+  <!-- SUBURBAN MAP VIEWPORT -->
+  <div id="suburb-map">
+    <div class="road-network">
+      <div class="road-line h"></div>
+      <div class="road-line v"></div>
+
+      <!-- CENTER APARTMENT TOWER (Elevator Feed Hub) -->
+      <div class="apartment-hub" onclick="openChannel('Central Apartments', 'all')">
+        <span class="apartment-hub-icon">🏢</span>
+        <span class="apartment-hub-title">Central Apartments<br><small>(Elevator Feed)</small></span>
+      </div>
+
+      <!-- SUBURBAN HOUSE CHANNELS -->
+      <!-- Top Left House -->
+      <div class="house-plot" style="top: 80px; left: 120px;" onclick="openChannel('Creative Cottage', 'tech')">
+        <div class="house-graphic" style="--house-roof: #e74c3c; --house-wall: #f39c12;">
+          <div class="house-door"></div>
+        </div>
+        <div class="house-label">🎨 Creative Cottage</div>
+      </div>
+
+      <!-- Top Right House -->
+      <div class="house-plot" style="top: 80px; right: 120px;" onclick="openChannel('The Music Studio', 'music')">
+        <div class="house-graphic" style="--house-roof: #9b59b6; --house-wall: #3498db;">
+          <div class="house-door"></div>
+        </div>
+        <div class="house-label">🎵 The Music Studio</div>
+      </div>
+
+      <!-- Bottom Left House -->
+      <div class="house-plot" style="bottom: 80px; left: 120px;" onclick="openChannel('Gamer Den', 'gaming')">
+        <div class="house-graphic" style="--house-roof: #2ecc71; --house-wall: #1abc9c;">
+          <div class="house-door"></div>
+        </div>
+        <div class="house-label">🎮 Gamer Den</div>
+      </div>
+
+      <!-- Bottom Right House -->
+      <div class="house-plot" style="bottom: 80px; right: 120px;" onclick="openChannel('Tech Garage', 'tech')">
+        <div class="house-graphic" style="--house-roof: #e67e22; --house-wall: #34495e;">
+          <div class="house-door"></div>
+        </div>
+        <div class="house-label">🔧 Tech Garage</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT FEED DRAWER (Elevator Feed) -->
+  <aside id="feed-drawer">
+    <div class="drawer-header">
+      <div class="drawer-title" id="active-channel-title">🏢 Central Apartments</div>
+      <span style="font-size: 0.8rem; color: #8a8aa3;">🛗 Elevator Active</span>
+    </div>
+
+    <div id="elevator-feed-container" onscroll="updateElevatorIndicator()">
+      <!-- Elevator Indicator Shaft -->
+      <div id="elevator-bar">
+        <div id="elevator-car-indicator"></div>
+      </div>
+
+      <!-- Apartment Post 3 -->
+      <article class="apartment-card" data-category="tech" onclick="elevatorScrollNext(this)">
+        <span class="floor-badge">Floor 3 - Apt 3B</span>
+        <div class="post-author">@Alex_Dev • Innovation Way</div>
+        <p class="post-text">Building a custom spatial audio visualizer using Three.js! Check out the short demo reel clip.</p>
+        <div class="post-video-box">[ Video Player Placeholder: Spatial Audio Demo ]</div>
+        <div class="elevator-click-hint">🛗 Click apartment to ride elevator down</div>
+      </article>
+
+      <!-- Apartment Post 2 -->
+      <article class="apartment-card" data-category="music" onclick="elevatorScrollNext(this)">
+        <span class="floor-badge">Floor 2 - Apt 2A</span>
+        <div class="post-author">@Melody_Studio • Harmony Ave</div>
+        <p class="post-text">Recorded a synthwave cover of KATSEYE songs in the home setup. What do you think?</p>
+        <div class="post-video-box">[ Video Player Placeholder: Synthwave Session ]</div>
+        <div class="elevator-click-hint">🛗 Click apartment to ride elevator down</div>
+      </article>
+
+      <!-- Apartment Post 1 -->
+      <article class="apartment-card" data-category="gaming" onclick="elevatorScrollNext(this)">
+        <span class="floor-badge">Floor 1 - Apt 1C</span>
+        <div class="post-author">@RetroGamer • Arcade Lane</div>
+        <p class="post-text">High-score speedrun attempt on speedway stage 4!</p>
+        <div class="post-video-box">[ Video Player Placeholder: Speedrun Clip ]</div>
+        <div class="elevator-click-hint">🛗 Click apartment to ride elevator to top</div>
+      </article>
+    </div>
+  </aside>
+
+  <script>
+    // Open Channel from Suburban Map
+    function openChannel(channelName, category) {
+      document.getElementById('active-channel-title').innerText = '🏡 ' + channelName;
+      if (category !== 'all') {
+        filterStreet(category, null);
+      } else {
+        filterStreet('all', null);
+      }
+    }
+
+    // Street Filter Chips
+    function filterStreet(category, btnElement) {
+      if (btnElement) {
+        document.querySelectorAll('.chip-btn').forEach(b => b.classList.remove('active'));
+        btnElement.classList.add('active');
+      }
+
+      const posts = document.querySelectorAll('.apartment-card');
+      posts.forEach(post => {
+        if (category === 'all' || post.dataset.category === category) {
+          post.style.display = 'block';
+        } else {
+          post.style.display = 'none';
+        }
+      });
+    }
+
+    // Elevator Scroll Mechanism (Clicking Apartment Cards)
+    function elevatorScrollNext(currentCard) {
+      const feed = document.getElementById('elevator-feed-container');
+      const nextCard = currentCard.nextElementSibling;
+
+      if (nextCard && nextCard.classList.contains('apartment-card') && nextCard.style.display !== 'none') {
+        nextCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else {
+        feed.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+
+    // Elevator Position Tracker
+    function updateElevatorIndicator() {
+      const feed = document.getElementById('elevator-feed-container');
+      const indicator = document.getElementById('elevator-car-indicator');
+      const scrollTop = feed.scrollTop;
+      const scrollHeight = feed.scrollHeight - feed.clientHeight;
+      const scrollPercent = scrollHeight > 0 ? (scrollTop / scrollHeight) : 0;
+
+      indicator.style.top = (scrollPercent * 92) + '%';
+    }
+
+    // Search Engine & Maps Bar Dynamic Filtering
+    function handleSearch(event) {
+      const query = event.target.value.toLowerCase();
+      const posts = document.querySelectorAll('.apartment-card');
+      const houses = document.querySelectorAll('.house-plot');
+
+      posts.forEach(post => {
+        const text = post.innerText.toLowerCase();
+        post.style.display = text.includes(query) ? 'block' : 'none';
+      });
+
+      houses.forEach(house => {
+        const name = house.innerText.toLowerCase();
+        house.style.opacity = name.includes(query) || query === '' ? '1' : '0.3';
+      });
+    }
+  </script>
+
+  <!-- Structured Data (JSON-LD) for Search Engine Optimization -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Neighbourhood",
+    "url": "https://example.com/neighbourhood",
+    "description": "Suburban social media platform featuring interactive channel houses, Maps search navigation, and apartment elevator scrolling.",
+    "applicationCategory": "SocialNetworkingApplication",
+    "operatingSystem": "All"
+  }
+  </script>
+</body>
+</html>
